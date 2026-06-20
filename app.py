@@ -2,12 +2,19 @@
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO
 from datetime import datetime
-from time import sleep
+import logging
+import signal
+import sys
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')  # изменено с 'gevent' на 'eventlet'
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
 
 # Хранилище истории сообщений
+MAX_HISTORY_LENGTH = 100
 message_history = []
 
 @app.route('/')
@@ -17,44 +24,103 @@ def index():
 # Подключение
 @socketio.on('connect')
 def handle_connect():
-    # Логирование
-    print(f'Client connected: {request.sid}')
+    logger.info(f'Client connected: {request.sid}')
 
 # Отключение
 @socketio.on('disconnect')
 def handle_disconnect():
-    # Логирование
-    print(f'Client disconnected: {request.sid}')
+    logger.info(f'Client disconnected: {request.sid}')
 
 # Вход в чат
 @socketio.on('join_room')
 def handle_join_room(data):
-    username = data.get('username', 'Гость')
-    room = data.get('room', 'main_chat')
-    socketio.emit('status', {'msg': f'{username} присоединился к чату'}, room=room)
-    sleep(0.1)
-    socketio.emit('message_history', message_history, to=request.sid)
-    # Логирование
-    print(f'{username} успешно вошёл в чат {room}')
+    try:
+        username = data.get('username', 'Гость')
+        room = data.get('room', 'main_chat')
+
+        # Отправляем статус всем в комнате
+        socketio.emit(
+            'status',
+            {'msg': f'{username} присоединился к чату'},
+            room=room
+        )
+
+        socketio.emit('message_history', message_history, to=request.sid)
+
+        logger.info(f'{username} успешно вошёл в чат {room}')
+    except Exception as e:
+        logger.error(f'Ошибка при входе в чат: {e}')
 
 # Отправка сообщений
 @socketio.on('send_message')
 def handle_send_message(data):
-    username = data['username']
-    text = data['text']
-    timestamp = datetime.now().strftime('%H:%M')
-    message = {
-        'username': username,
-        'text': text,
-        'timestamp': timestamp
-    }
-    message_history.append(message)
-    # Логирование
-    print(f'Сообщение добавлено в историю: {message}')
-    socketio.emit('new_message', message, room=data.get('room', 'main_chat'))
-    # Логирование
-    print('Отправляем new_message всем в комнате')
+    try:
+        # Валидация данных
+        if not data or 'username' not in data or 'text' not in data:
+            logger.warning(f'Получены некорректные данные: {data}')
+            return
 
-# Мейн
+        username = data['username']
+        text = data['text'].strip()
+
+        # Защита от пустых сообщений
+        if not text:
+            logger.warning(f'Получена пустая строка от {username}')
+            return
+
+        room = data.get('room', 'main_chat')
+        timestamp = datetime.now().strftime('%H:%M')
+
+        message = {
+            'username': username,
+            'text': text,
+            'timestamp': timestamp
+        }
+
+        # История
+        message_history.append(message)
+        if len(message_history) > MAX_HISTORY_LENGTH:
+            message_history.pop(0)
+
+        logger.info(f'Сообщение добавлено в историю: {message}')
+
+        socketio.emit(
+            'new_message',
+            message,
+            room=room,
+            include_self=False
+        )
+        logger.info(f'Отправляем new_message всем в комнате {room}, кроме отправителя')
+    except Exception as e:
+        logger.error(f'Ошибка при отправке сообщения: {e}')
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def signal_handler(signum, frame):
+    logger.info(f"Получен сигнал {signum} — остановка сервера...")
+    sys.exit(0)
+
+# Обработчики сигналов
+signal.signal(signal.SIGINT, signal_handler) 
+signal.signal(signal.SIGTERM, signal_handler) 
+
 if __name__ == '__main__':
-    socketio.run(app, use_reloader=False)
+    host = '0.0.0.0'
+    port = 5000
+    debug_mode = False
+
+    logger.info(f"🚀 Запуск мессенджера на http://{host}:{port}")
+    try:
+        socketio.run(
+            app,
+            host=host,
+            port=port,
+            debug=debug_mode
+        )
+    except Exception as e:
+        logger.error(f"❌ Ошибка запуска сервера: {e}")
+        sys.exit(1)
+
+if __name__ == '__main__':
+    logger.info("Запуск сервера на http://0.0.0.0:5000")
+    socketio.run(app, host='0.0.0.0', port=5000, debug=False)
