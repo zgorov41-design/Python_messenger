@@ -5,7 +5,7 @@ from datetime import datetime
 from time import sleep
 
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')  # изменено с 'gevent' на 'eventlet'
 
 # Хранилище истории сообщений
 message_history = []
@@ -13,6 +13,7 @@ message_history = []
 @app.route('/')
 def index():
     return render_template('index.html')
+
 # Подключение
 @socketio.on('connect')
 def handle_connect():
@@ -22,7 +23,7 @@ def handle_connect():
 # Отключение
 @socketio.on('disconnect')
 def handle_disconnect():
-    #Логирование
+    # Логирование
     print(f'Client disconnected: {request.sid}')
 
 # Вход в чат
@@ -53,8 +54,7 @@ def handle_send_message(data):
     socketio.emit('new_message', message, room=data.get('room', 'main_chat'))
     # Логирование
     print('Отправляем new_message всем в комнате')
-    
+
 # Мейн
 if __name__ == '__main__':
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True)
-
+    socketio.run(app, use_reloader=False)
