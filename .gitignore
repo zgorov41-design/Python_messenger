@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Виртуальные окружения
 venv/
 env/
@@ -21,14 +22,30 @@ new_venv/
 .cache/
 
 # Папки пользователя
+=======
+venv/
+env/
+.env
+__pycache__/
+*.pyc
+.vscode/
+.idea/
+.DS_Store
+.bash_history
+.ssh/
+.config/
+>>>>>>> 3b1667c (Add .gitignore to exclude unnecessary files)
 Desktop/
 Documents/
 Downloads/
 Pictures/
 Music/
 Videos/
+<<<<<<< HEAD
 
 # Локальные логи и временные файлы
+=======
+>>>>>>> 3b1667c (Add .gitignore to exclude unnecessary files)
 *.log
 tmp/
 temp/
